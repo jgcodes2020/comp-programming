@@ -51,3 +51,39 @@ inline void scanf2(const char* format, Ts&... args) {
   if ((size_t) res < sizeof...(Ts))
     throw std::runtime_error("scanf didn't scan all args");
 }
+
+struct point {
+  double x, y;
+};
+
+inline point operator+(point a, point b) {
+  return point {a.x + b.x, a.y + b.y};
+}
+
+inline point operator-(point a, point b) {
+  return point {a.x - b.x, a.y - b.y};
+}
+
+inline point operator*(point a, double b) {
+  return point{a.x * b, a.y * b};
+}
+inline point operator*(double a, point b) {
+  return b * a;
+}
+
+inline point operator/(point a, double b) {
+  return point {a.x / b, a.y / b};
+}
+
+inline double slope(point a) {
+  return a.y / a.x;
+}
+
+point circumcenter(point a, point b, point c) {
+  point mid1 = (a + b) / 2, mid2 = (b + c) / 2;
+  double m1 = -1 / slope(a - b), m2 = -1 / slope(b - c);
+}
+
+int main() {
+  
+}

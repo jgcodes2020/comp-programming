@@ -25,9 +25,14 @@ def test_program(cmd_argv: list[str]):
         input_file.seek(0, SEEK_SET)
         print("==============================")
         
-        proc = subp.Popen(cmd_argv, stdin=input_file)
+        proc = subp.Popen(cmd_argv, stdin=input_file, stdout=None, stderr=None)
         # Auto-controls TLE for us
-        proc.wait(TIME_LIMIT)
+        try:
+            proc.wait(TIME_LIMIT)
+        except subp.TimeoutExpired:
+            print("\n==============================")
+            print("TLE (Time Limit Exceeded)")
+            return
         
         if proc.returncode is not None:
             if proc.returncode == 0:
@@ -39,8 +44,6 @@ def test_program(cmd_argv: list[str]):
             return
         # process isn't dead
         proc.kill()
-        print("\n==============================")
-        print("TLE (Time Limit Exceeded)")
 
 def main():
     (SCRIPT_ROOT/"build").mkdir(exist_ok=True)
@@ -66,6 +69,7 @@ def main():
             except subp.CalledProcessError:
                 print("Compiler error, exiting...")
                 exit(3)
+            print("==============================")
             test_program(["build/run"])
         case ".c":
             try:
