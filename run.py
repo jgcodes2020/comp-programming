@@ -5,7 +5,7 @@ import config.parser as cfg
 from sys import argv, exit
 from pathlib import Path
 import subprocess as subp
-import os
+import os, sys
 import psutil
 
 SCRIPT_ROOT = Path(__file__).parent
@@ -15,17 +15,27 @@ def test_program(cmd_argv: list[str]):
     TIME_LIMIT = float(cfg.get_cfg("time_limit", "3.0"))
     
     with open("build/input.txt", 'w+') as input_file:
-        subp.run([
-            "dialog", "--keep-tite", "--aspect", "2", "--title", "Input test case",
-            "--editbox", "build/input.txt", "0", "0"
-        ], stderr=input_file).check_returncode()
+        proc: subp.Popen = None
         
-        input_file.seek(0, SEEK_SET)
-        print(input_file.read())
-        input_file.seek(0, SEEK_SET)
-        print("==============================")
+        if sys.stdin.isatty():
+            dlgproc = subp.run([
+                "dialog", "--keep-tite", "--aspect", "2", "--title", "Input test case",
+                "--editbox", "build/input.txt", "0", "0"
+            ], stderr=input_file)
+            
+            if dlgproc.returncode != 0:
+                print("Input canceled")
+                exit(0)
+            
+            input_file.seek(0, SEEK_SET)
+            print(input_file.read())
+            input_file.seek(0, SEEK_SET)
+            print("==============================")
+            
+            proc = subp.Popen(cmd_argv, stdin=input_file, stdout=None, stderr=None)
+        else:
+            proc = subp.Popen(cmd_argv, stdin=sys.stdin, stdout=None, stderr=None)
         
-        proc = subp.Popen(cmd_argv, stdin=input_file, stdout=None, stderr=None)
         # Auto-controls TLE for us
         try:
             proc.wait(TIME_LIMIT)
@@ -74,7 +84,7 @@ def main():
         case ".c":
             try:
                 subp.run([
-                    "clang++", "-O3", f"-std={cfg.get_cfg('c_standard', 'c11')}", 
+                    "clang", "-O3", f"-std={cfg.get_cfg('c_standard', 'c11')}", 
                     "-o", "build/run", argv[1]
                 ]).check_returncode()
             except subp.CalledProcessError:
