@@ -3,6 +3,7 @@ jgcodes's dead simple CP template
 */
 
 #include <bits/stdc++.h>
+#include <set>
 #include <vector>
 using namespace std;
 
@@ -24,20 +25,24 @@ std::array<int, size_t(1e6)> inp {};
 std::array<int, size_t(1e6)+1> psa {};
 
 int main() {
-  int n, c;
+  int n, c, c2;
+  std::set<int> pts;
+  
   scanf2("%d %d\n", n, c);
+  c2 = c >> 1;
   
   for (int i = 0; i < n; i++) {
     int in;
     scanf2("%d ", in);
     inp[in]++;
+    pts.emplace(in);
   }
   
-  // setup PSA
-  psa[0] = 0;
-  for (int i = 1; i <= c; i++) {
-    psa[i] = psa[i - 1] + inp[i - 1];
+  for (int i : pts) {
+    // limit of i
+    int li = i + c2;
+    if (li > c) {
+      
+    }
   }
-  
-  for (int i = 0;)
 }

@@ -93,7 +93,7 @@ def main():
             test_program(["build/run"])
         case ".java":
             test_program(["java", f"--source={cfg.get_cfg('java_version', '11')}", argv[1]])
-        case ".python":
+        case ".py":
             test_program(["python3", argv[1]])
 if __name__ == "__main__":
     main()

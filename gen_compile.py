@@ -36,7 +36,7 @@ def main():
     
     with open(SCRIPT_ROOT/"compile_commands.json", "w") as outfile:
         print("Serializing...")
-        json.dump(result, outfile)
+        json.dump(result, outfile, indent=2)
     
     pass
 if __name__ == "__main__":
