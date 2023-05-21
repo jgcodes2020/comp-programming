@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess as subp
 import os, sys
 import psutil
+import time as tm
 
 SCRIPT_ROOT = Path(__file__).parent
 os.chdir(SCRIPT_ROOT)
@@ -37,8 +38,10 @@ def test_program(cmd_argv: list[str]):
             proc = subp.Popen(cmd_argv, stdin=sys.stdin, stdout=None, stderr=None)
         
         # Auto-controls TLE for us
+        st = tm.time_ns()
         try:
             proc.wait(TIME_LIMIT)
+            st = tm.time_ns() - st
         except subp.TimeoutExpired:
             print("\n==============================")
             print("TLE (Time Limit Exceeded)")
@@ -47,7 +50,7 @@ def test_program(cmd_argv: list[str]):
         if proc.returncode is not None:
             if proc.returncode == 0:
                 print("\n==============================")
-                print("Process returned normally")
+                print(f"Process returned normally ({st / 10**9:.3f} s)")
             else:
                 print("\n==============================")
                 print(f"RTE (Runtime Exception), process returned {proc.returncode}")
@@ -74,7 +77,7 @@ def main():
             try:
                 subp.run([
                     "clang++", "-O3", f"-std={cfg.get_cfg('cpp_standard', 'c++11')}", 
-                    "-o", "build/run", argv[1]
+                    "-g", "-o", "build/run", argv[1]
                 ]).check_returncode()
             except subp.CalledProcessError:
                 print("Compiler error, exiting...")
@@ -84,8 +87,8 @@ def main():
         case ".c":
             try:
                 subp.run([
-                    "clang", "-O3", f"-std={cfg.get_cfg('c_standard', 'c11')}", 
-                    "-o", "build/run", argv[1]
+                    "clang", f"-std={cfg.get_cfg('c_standard', 'c11')}", 
+                    "-g", "-o", "build/run", argv[1]
                 ]).check_returncode()
             except subp.CalledProcessError:
                 print("Compiler error, exiting...")

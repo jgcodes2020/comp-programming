@@ -36,7 +36,7 @@ inline void scanf2(const char* format, Ts&... args) {
     throw std::runtime_error("scanf didn't scan all args");
 }
 
-arr<i32, isz(1e6) + 2> a {};
+arr<i32, isz(1e6) + 2> has_incoming {};
 
 void run_case() {
   isz n;
@@ -70,7 +70,7 @@ void run_case() {
 #elif SUBTASK <= 2
   scanf2("%d\n", n);
   for (isz i = 0; i < n; i++) {
-    scanf2("%d", a[i]);
+    scanf2("%d", has_incoming[i]);
   }
 
   // multiple "directional" pairs
@@ -79,17 +79,17 @@ void run_case() {
   bool pd_found = false;
 
   for (isz i = 0; i < n - 1; i++) {
-    if (a[i] != 0 && a[i + 1] != 0) {
-      if (a[i] == a[i + 1]) {
+    if (has_incoming[i] != 0 && has_incoming[i + 1] != 0) {
+      if (has_incoming[i] == has_incoming[i + 1]) {
         puts("NO");
         return;
       }
       if (!pd_found) {
         pd_found = true;
-        pd       = (a[i] < a[i + 1]) != (i % 2 == 0);
+        pd       = (has_incoming[i] < has_incoming[i + 1]) != (i % 2 == 0);
       }
       else {
-        bool in_dir = (a[i] < a[i + 1]) != (i % 2 == 0);
+        bool in_dir = (has_incoming[i] < has_incoming[i + 1]) != (i % 2 == 0);
         if (in_dir != pd) {
           puts("NO");
           return;
