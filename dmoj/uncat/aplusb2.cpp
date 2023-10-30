@@ -2,10 +2,13 @@
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <iomanip>
 #include <ios>
 #include <iostream>
 #include <limits>
 #include <ostream>
+#include <ratio>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -92,7 +95,7 @@ inline void cadd_xx(std::vector<word_t>& a, const std::vector<word_t>& b) {
   bool carry = false;
   for (size_t i = 0; i < a.size(); i++) {
     carry =
-      _addcarry_u64(false, a[i], (i < b.size() ? b[i] : 0), (ullong*) &a[i]);
+      _addcarry_u64(carry, a[i], (i < b.size() ? b[i] : 0), (ullong*) &a[i]);
   }
   if (carry)
     a.push_back(1);
@@ -114,6 +117,24 @@ inline bool csub_xx(std::vector<word_t>& a, const std::vector<word_t>& b) {
   for (size_t i = 0; i < a.size(); i++) {
     carry =
       _subborrow_u64(carry, a[i], (i < b.size() ? b[i] : 0), (ullong*) &a[i]);
+  }
+
+  if (carry) {
+    ccomp_x(a);
+  }
+  trim_x(a);
+  return carry;
+}
+
+// like csub_xx but reverses the subtraction.
+inline bool crsub_xx(std::vector<word_t>& a, const std::vector<word_t>& b) {
+  if (b.size() > a.size())
+    a.resize(b.size());
+
+  bool carry = false;
+  for (size_t i = 0; i < a.size(); i++) {
+    carry =
+      _subborrow_u64(carry, (i < b.size() ? b[i] : 0), a[i], (ullong*) &a[i]);
   }
 
   if (carry) {
@@ -149,6 +170,22 @@ inline word_t cdiv_xw(std::vector<word_t>& a, word_t b) {
   return rem;
 }
 
+// like strcmp: return <0 if a<b, >0 if a>b, and ==0 if a==b.
+inline int cmp_xx(const std::vector<word_t>& a, const std::vector<word_t>& b) {
+  if (a.size() < b.size())
+    return -1;
+  if (a.size() > b.size())
+    return 1;
+  
+  auto [ma, mb] = mismatch(a.rbegin(), a.rend(), b.rbegin());
+  if (ma == a.rend())
+    return 0;
+  if (*ma < *mb)
+    return -1;
+  else
+    return 1;
+}
+
 // SIGNED MATH ROUTINES
 // ====================
 inline void signfix_y(bigint& a) {
@@ -156,25 +193,42 @@ inline void signfix_y(bigint& a) {
     a.sign = false;
 }
 inline void cadd_yy(bigint& a, const bigint& b) {
-  if (a.sign ^ b.sign)
-    a.sign ^= csub_xx(a.words, b.words);
+  if (a.sign ^ b.sign) {
+    int cmp = cmp_xx(a.words, b.words);
+    if (cmp < 0) {
+      crsub_xx(a.words, b.words);
+      a.sign = !a.sign;
+    }
+    else if (cmp == 0) {
+      a.words.resize(1, 0);
+      a.words[0] = 0;
+    }
+    else {
+      csub_xx(a.words, b.words);
+    }
+  }
   else
     cadd_xx(a.words, b.words);
-  
+
   signfix_y(a);
 }
 
 // DEBUG ROUTINES
 // ==============
 
-inline std::ostream& operator<<(std::ostream& out, const std::vector<word_t>& v) {
-  out << '[';
+inline std::ostream& operator<<(
+  std::ostream& out, const std::vector<word_t>& v) {
+  auto flags = out.flags();
+
+  out << '[' << std::hex;
   if (v.size() > 0) {
-    out << v[0];
+    out << setw(16) << setfill('0') << v[0];
     for (size_t i = 1; i < v.size(); i++)
-      out << ", " << v[i];
+      out << ", " << setw(16) << setfill('0') << v[i];
   }
-  return out << ']';
+  out << ']';
+  out.flags(flags);
+  return out;
 }
 
 // SERIALIZATION ROUTINES
@@ -184,13 +238,14 @@ inline size_t ilog2(word_t x) {
   return (x == 0) ? 0 : word_bits - __builtin_clzl(x);
 }
 
-inline size_t digit_count(word_t x) {
+inline size_t ilog10(word_t x) {
   // precalculated: \log_{10}(2^x)
   constexpr size_t approx_table[] {
     0,  0,  0,  0,  1,  1,  1,  2,  2,  2,  3,  3,  3,  3,  4,  4,
     4,  5,  5,  5,  6,  6,  6,  6,  7,  7,  7,  8,  8,  8,  9,  9,
     9,  9,  10, 10, 10, 11, 11, 11, 12, 12, 12, 12, 13, 13, 13, 14,
     14, 14, 15, 15, 15, 15, 16, 16, 16, 17, 17, 17, 18, 18, 18, 18,
+    19,
   };
   // precalculated: 10^x
   constexpr word_t pow10[] {
@@ -217,7 +272,7 @@ inline size_t digit_count(word_t x) {
   };
 
   size_t guess = approx_table[ilog2(x)];
-  return guess + (x > pow10[guess]);
+  return guess + (x >= pow10[guess]);
 }
 
 inline bigint parse_ys(std::string_view token) {
@@ -237,9 +292,11 @@ inline bigint parse_ys(std::string_view token) {
   word_t chunk;
 
   // leading chunk
-  std::from_chars(it, it + lead_len, chunk);
-  res.words[0] = chunk;
-  it += lead_len;
+  if (lead_len > 0) {
+    std::from_chars(it, it + lead_len, chunk);
+    res.words[0] = chunk;
+    it += lead_len;
+  }
 
   // trailing chunks
   for (size_t i = 0; i < n_chunks; i++) {
@@ -249,7 +306,7 @@ inline bigint parse_ys(std::string_view token) {
     cadd_xw(res.words, chunk);
     it += word_digits;
   }
-  
+
   signfix_y(res);
   return res;
 }
@@ -262,9 +319,9 @@ inline std::string stream_sy(bigint& a) {
   } while (a.words.size() > 1 || a.words[0] != 0);
   if (chunks.empty())
     chunks.push_back(0);
-  
+
   auto it   = chunks.rbegin();
-  size_t dc = std::max(digit_count(*it), (size_t) 1);
+  size_t dc = std::max(ilog10(*it), (size_t) 1);
 
   std::string out(a.sign + dc + (chunks.size() - 1) * word_digits, '0');
   char* optr = out.data();
@@ -277,13 +334,13 @@ inline std::string stream_sy(bigint& a) {
 
   auto res = std::to_chars(optr, eptr, *it);
   ++it;
-  optr += dc;
+  optr = res.ptr;
 
   while (it != chunks.rend()) {
-    dc = digit_count(*it);
+    dc  = std::max(ilog10(*it), (size_t) 1);
     res = std::to_chars(optr + word_digits - dc, eptr, *it);
     ++it;
-    optr += word_digits;
+    optr = res.ptr;
   }
 
   return out;
@@ -297,7 +354,7 @@ inline std::istream& operator>>(std::istream& in, bigint& bi) {
 }
 
 inline std::ostream& operator<<(std::ostream& out, const bigint& bi) {
-  bigint copy = bi;
+  bigint copy        = bi;
   std::string buffer = stream_sy(copy);
   return out << buffer;
 }
@@ -307,18 +364,42 @@ inline std::ostream& operator<<(std::ostream& out, bigint&& bi) {
   return out << buffer;
 }
 
-int main() {
-  ios_base::sync_with_stdio(false);
-  cin.tie(0);
-  
+// TESTING ROUTINES
+inline void aplusb2_dmoj_solution() {
   int c;
   cin >> c;
-  
+
   bigint x, y;
   for (int i = 0; i < c; i++) {
-    cin >> x >> y;
+    cin >> x;
+    cin >> y;
     cadd_yy(x, y);
     cout << std::move(x) << '\n';
   }
   cout << flush;
+}
+
+inline void aplusb2_test() {
+  int c;
+  cin >> c;
+
+  bigint x, y;
+  for (int i = 0; i < c; i++) {
+    cin >> x;
+    cout << "x = (" << x.sign << ", " << x.words << ")\n";
+    cin >> y;
+    cout << "y = (" << y.sign << ", " << y.words << ")\n";
+    cadd_yy(x, y);
+    cout << "x + y = (" << x.sign << ", " << x.words << ")\n";
+    cout << std::move(x) << '\n';
+  }
+  cout << flush;
+}
+
+int main() {
+  ios_base::sync_with_stdio(false);
+  cin.tie(0);
+  cout.setf(ios_base::boolalpha);
+  
+  aplusb2_dmoj_solution();
 }
