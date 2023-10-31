@@ -81,21 +81,25 @@ inline void cadd_xw(std::vector<word_t>& a, word_t b) {
     return;
   }
   bool carry = _addcarry_u64(false, a[0], b, (ullong*) &a[0]);
-  for (size_t i = 1; i < a.size() && carry; i++) {
+  for (size_t i = 1; i < a.size(); i++) {
     carry = _addcarry_u64(carry, a[i], 0, (ullong*) &a[i]);
+    // this is the only carry that will propagate, we can stop early
+    // if it stops going
+    if (!carry)
+      return;
   }
   if (carry)
     a.push_back(1);
 }
 
-inline void cadd_xx(std::vector<word_t>& a, const std::vector<word_t>& b) {
-  if (b.size() > a.size())
-    a.resize(b.size());
+inline void cadd_xx(std::vector<word_t>& a, const std::vector<word_t>& b, size_t offb = 0) {
+  if (b.size() + offb > a.size())
+    a.resize(b.size() + offb);
 
   bool carry = false;
   for (size_t i = 0; i < a.size(); i++) {
     carry =
-      _addcarry_u64(carry, a[i], (i < b.size() ? b[i] : 0), (ullong*) &a[i]);
+      _addcarry_u64(carry, a[i + offb], (i < b.size() ? b[i] : 0), (ullong*) &a[i + offb]);
   }
   if (carry)
     a.push_back(1);
@@ -144,6 +148,23 @@ inline bool crsub_xx(std::vector<word_t>& a, const std::vector<word_t>& b) {
   return carry;
 }
 
+inline void mul_xw(const std::vector<word_t>& a, word_t b, std::vector<word_t>& r) {
+  r.clear();
+  r.reserve(a.size());
+  word_t carry = 0;
+  for (size_t i = 0; i < a.size(); i++) {
+    word_t hi, lo;
+
+    hi = _mul_u64(a[i], b, &lo);
+    hi += _addcarry_u64(false, lo, carry, (ullong*) &lo);
+
+    r.push_back(lo);
+    carry = hi;
+  }
+  if (carry > 0)
+    r.push_back(carry);
+}
+
 inline void cmul_xw(std::vector<word_t>& a, word_t b) {
   word_t carry = 0;
   for (size_t i = 0; i < a.size(); i++) {
@@ -186,6 +207,20 @@ inline int cmp_xx(const std::vector<word_t>& a, const std::vector<word_t>& b) {
     return 1;
 }
 
+// MULTIPLICATION
+// ==============
+
+inline void mul_base_xx(const std::vector<word_t>& a, const std::vector<word_t>& b, std::vector<word_t>& r) {
+  r.clear();
+  r.push_back(0);
+  
+  std::vector<word_t> temp;
+  temp.reserve(a.size() + b.size());
+  for (size_t i = 0; i < b.size(); i++) {
+    mul_xw(a, b[i], temp);
+    cadd_xx(r, temp, i);
+  }
+}
 // SIGNED MATH ROUTINES
 // ====================
 inline void signfix_y(bigint& a) {
