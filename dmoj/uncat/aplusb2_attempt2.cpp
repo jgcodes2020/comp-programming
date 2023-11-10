@@ -8,6 +8,7 @@
 #include <ios>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <ostream>
 #include <ratio>
 #include <stdexcept>
@@ -140,7 +141,6 @@ inline void cadd_xw(wvec_t& a, word_t b) {
 
 inline void add_xx(wvec_range a, wvec_range b, wvec_t& r) {
   r.clear();
-  r.reserve(max(a.size(), b.size()));
 
   bool carry = false;
   word_t rw = 0;
@@ -291,14 +291,14 @@ inline void mul_toom2_xx(wvec_range a, wvec_range b, wvec_t& r) {
     mul_base_xx(a, b, r);
     return;
   }
+  cout << "Chunk size: " << chunk_size << endl;
+  std::string s;
+  getline(cin, s);
   
   r.clear();
   r.push_back(0);
   
   wvec_t t0, t1, t2;
-  t0.reserve(2 * chunk_size);
-  t1.reserve(2 * chunk_size);
-  t2.reserve(2 * chunk_size);
   
   wvec_range a0 {a, 0, chunk_size};
   wvec_range a1 {a, chunk_size, a.size() - chunk_size};
@@ -348,6 +348,11 @@ inline bigint& operator+=(bigint& a, const bigint& b) {
     cadd_xx(a.words, b.words);
 
   signfix_y(a);
+  return a;
+}
+
+inline bigint& operator*=(bigint& a, word_t b) {
+  cmul_xw(a.words, b);
   return a;
 }
 
@@ -520,15 +525,15 @@ inline void aplusb2_test() {
   int c;
   cin >> c;
 
-  bigint x, y;
+  bigint x, y, r;
   for (int i = 0; i < c; i++) {
     cin >> x;
     cout << "x = (" << x.sign << ", " << x.words << ")\n";
     cin >> y;
     cout << "y = (" << y.sign << ", " << y.words << ")\n";
-    x += y;
-    cout << "x + y = (" << x.sign << ", " << x.words << ")\n";
-    cout << std::move(x) << '\n';
+    mul_toom2_xx(x.words, y.words, r.words);
+    cout << "x + y = (" << r.sign << ", " << r.words << ")\n";
+    cout << std::move(r) << '\n';
   }
   cout << flush;
 }
@@ -538,5 +543,5 @@ int main() {
   cin.tie(0);
   cout.setf(ios_base::boolalpha);
 
-  aplusb2_dmoj_solution();
+  aplusb2_test();
 }
