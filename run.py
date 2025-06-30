@@ -96,7 +96,7 @@ def main():
             try:
                 subp.run([
                     "clang++", "-O2", f"-std={cfg.get_cfg('cpp_standard', 'c++11')}", 
-                    "-g", "-o", "build/run", src_path
+                    "-march=native", "-g", "-o", "build/run", src_path
                 ]).check_returncode()
             except subp.CalledProcessError:
                 print("Compiler error, exiting...")
