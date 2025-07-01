@@ -80,6 +80,7 @@ def parse_args() -> ap.Namespace:
     parser = ap.ArgumentParser()
     parser.add_argument("source", type=lambda x: check_valid_path(parser, x))
     parser.add_argument("-i", "--interactive", action="store_true")
+    parser.add_argument("-c", "--compile-only", action="store_true")
     
     return parser.parse_args()
 
@@ -95,14 +96,15 @@ def main():
         case ".cpp"|".cxx"|".cc":
             try:
                 subp.run([
-                    "clang++", "-O2", f"-std={cfg.get_cfg('cpp_standard', 'c++11')}", 
+                    "clang++", "-Og", f"-std={cfg.get_cfg('cpp_standard', 'c++11')}", 
                     "-march=native", "-g", "-o", "build/run", src_path
                 ]).check_returncode()
             except subp.CalledProcessError:
                 print("Compiler error, exiting...")
                 exit(3)
-            print("==============================")
-            test_program(["build/run"], interactive=opts.interactive)
+            if not opts.compile_only:
+                print("==============================")
+                test_program(["build/run"], interactive=opts.interactive)
         case ".c":
             try:
                 subp.run([
@@ -112,7 +114,9 @@ def main():
             except subp.CalledProcessError:
                 print("Compiler error, exiting...")
                 exit(3)
-            test_program(["build/run"], interactive=opts.interactive)
+            if not opts.compile_only:
+                print("==============================")
+                test_program(["build/run"], interactive=opts.interactive)
         case ".java":
             test_program(["java", f"--source={cfg.get_cfg('java_version', '11')}", src_path], interactive=opts.interactive)
         case ".py":

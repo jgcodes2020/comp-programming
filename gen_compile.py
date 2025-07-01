@@ -16,7 +16,7 @@ def main():
                 result.append({
                     "directory": str(SCRIPT_ROOT),
                     "arguments": [
-                        "clang++", "-O2", f"-std={cfg.get_cfg('cpp_standard', 'c++11')}", 
+                        "clang++", "-Og", f"-std={cfg.get_cfg('cpp_standard', 'c++11')}", 
                         "-o", "build/run", str(absfile)
                     ],
                     "file": str(absfile)

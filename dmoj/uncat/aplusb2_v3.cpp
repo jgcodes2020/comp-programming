@@ -1,18 +1,16 @@
 #include <bits/stdc++.h>
 #include <immintrin.h>
 
-namespace views = std::ranges::views;
+struct uint64_x2 {
+  uint64_t a, b;
+};
+
+struct uint64_check {
+  uint64_t value;
+  bool valid;
+};
 
 namespace intr {
-  struct uint64_x2 {
-    uint64_t a, b;
-  };
-
-  struct uint64_check {
-    uint64_t value;
-    bool valid;
-  };
-
   [[nodiscard]] inline uint64_x2 _mulq(uint64_t a, uint64_t b) {
     uint64_t _hi, _lo;
 
@@ -35,10 +33,8 @@ namespace intr {
     const __m128i ASCII_ZERO  = _mm_set1_epi8('0');
     const __m128i NINE        = _mm_set1_epi8(9);
     const __m128i STAGE1_MASK = _mm_set1_epi16(0x010A);
-    const __m128i STAGE2_MASK =
-      _mm_set_epi16(1, 100, 1, 100, 1, 100, 1, 100);
-    const __m128i STAGE3_MASK =
-      _mm_set_epi16(0, 0, 0, 0, 1, 10'000, 1, 10'000);
+    const __m128i STAGE2_MASK = _mm_set_epi16(1, 100, 1, 100, 1, 100, 1, 100);
+    const __m128i STAGE3_MASK = _mm_set_epi16(0, 0, 0, 0, 1, 10'000, 1, 10'000);
 
     const uint64_t LOW_HALF = UINT64_C(0x0000'0000'FFFF'FFFF);
     const uint64_t ONE_E8   = 1e8;
@@ -97,14 +93,64 @@ namespace tbl {
 }  // namespace tbl
 
 namespace impl {
-  inline size_t ilog2(uint64_t x) {
-    return (x == 0) ? 0 : 64 - __builtin_clzl(x);
-  }
 
-  uint64_t ilog10(uint64_t x) {
-    size_t guess = tbl::log10_approx_table[ilog2(x)];
-    return guess + (x >= tbl::pow10[guess]);
-  }
+  // Based on Moller and Granlund
+  // https://gmplib.org/~tege/division-paper.pdf
+
+  class fast_divq_t {
+  public:
+    fast_divq_t(uint64_t d) {
+      if (d == 0)
+        throw std::out_of_range("divisor cannot be 0");
+
+      uint64_t shift = std::countl_zero(d);
+      uint64_t dn    = d << shift;
+
+      // v = ((beta^2 - 1) / dn) - beta
+      // Since dn is normalized, (2^64 - 1) / dn is always 1.
+      // Hence, we can always subtract off dn and get the 2nd digit, which will
+      // be v.
+      uint64_t v =
+        intr::_divq(0xFFFF'FFFF'FFFF'FFFF - dn, 0xFFFF'FFFF'FFFF'FFFF, dn).a;
+
+      m_d = dn;
+      m_v = v;
+      m_k = shift;
+    }
+
+    friend uint64_x2 fast_divq(
+      uint64_t u1, uint64_t u0, const fast_divq_t& div) {
+      assert(u1 < (div.m_d >> div.m_k));
+
+      // shift (u1, u0) left to match the normalized quotient
+      if (div.m_k > 0) {
+        u1 = (u1 << div.m_k) | (u0 >> (64 - div.m_k));
+        u0 = u0 << div.m_k;
+      }
+
+      // Division algorithm for normalized divisor
+      auto [q1, q0] = intr::_mulq(u1, div.m_v);
+      q1            = q1 + q0 + 1;
+      q0            = q0 + u0;
+
+      uint64_t r = u0 - q1 * div.m_d;
+      if (r > q0 && (r + div.m_d) < div.m_d) {
+        q1 -= 1;
+        r += div.m_d;
+      }
+
+      // shift r right to match the non-normalized divisor
+      return {q1, r >> div.m_k};
+    }
+
+  private:
+    // The normalized divisor.
+    uint64_t m_d;
+    // The magic constant corresponding to m_d.
+    uint64_t m_v;
+    // The shift needed to go from the actual divisor to m_d.
+    uint64_t m_k;
+  };
 
   // Add vector with word. Returns the carry digit.
   uint64_t add_vx(std::span<uint64_t> a, uint64_t b) {
@@ -197,7 +243,7 @@ namespace impl {
   }
 
   // Divide vector by word. Returns the remainder.
-  uint64_t div_vx(std::span<uint64_t> a, uint64_t b) {
+  uint64_t div_simple_vx(std::span<uint64_t> a, uint64_t b) {
     uint64_t* ptr = &a[a.size() - 1];
     uint64_t* end = &a[0] - 1;
 
@@ -209,6 +255,31 @@ namespace impl {
       ptr--;
     }
     return crem;
+  }
+
+  uint64_t div_precomp_vx(std::span<uint64_t> a, uint64_t b) {
+    uint64_t* ptr = &a[a.size() - 1];
+    uint64_t* end = &a[0] - 1;
+
+    fast_divq_t div {b};
+
+    uint64_t crem = 0;
+    while (ptr != end) {
+      auto [quot, rem] = fast_divq(crem, *ptr, div);
+      *ptr             = quot;
+      crem             = rem;
+      ptr--;
+    }
+    return crem;
+  }
+
+  uint64_t div_vx(std::span<uint64_t> a, uint64_t b) {
+    if (a.size() < 5) {
+      return div_simple_vx(a, b);
+    }
+    else {
+      return div_precomp_vx(a, b);
+    }
   }
 }  // namespace impl
 
@@ -303,9 +374,24 @@ public:
     return rem;
   }
 
+  template <class T>
+  friend bool operator==(const svint& a, T b)
+    requires std::is_unsigned_v<T>
+  {
+    return !a.m_sign && a.m_words.size() == 1 && a.m_words[0] == b;
+  }
+
+  template <class T>
+  friend bool operator==(const svint& a, T b)
+    requires std::is_signed_v<T>
+  {
+    return (a.m_sign == (b < 0)) && a.m_words.size() == 1 &&
+      a.m_words[0] == std::abs(b);
+  }
+
   friend std::from_chars_result from_chars(
     const char* data, const char* end, svint& value) {
-    constexpr uint64_t ONE_E16 = UINT64_C(10'000'000'000'000'000);
+    constexpr uint64_t ONE_E19 = UINT64_C(10'000'000'000'000'000);
 
     auto first = data;
 
@@ -315,24 +401,20 @@ public:
       value.m_sign = true;
     }
 
-    while (end - data >= 16) {
-      auto [next, valid] = intr::sse42_parse16(data);
-      if (!valid) {
-        return std::from_chars_result {
-          .ptr = first, .ec = std::errc::invalid_argument};
+    while (end - data >= 19) {
+      uint64_t next  = 0;
+      auto [ptr, ec] = std::from_chars(data, data + 19, next);
+      if (ec != std::errc {}) {
+        return std::from_chars_result {.ptr = first, .ec = ec};
       }
-      value *= ONE_E16;
+      value *= ONE_E19;
       value += next;
-
-      data += 16;
     }
     if (end - data > 0) {
-      uint64_t last = 0;
+      uint64_t last  = 0;
       auto [ptr, ec] = std::from_chars(data, end, last);
       if (ec != std::errc {}) {
-        return std::from_chars_result {
-          .ptr = first, .ec = ec
-        };
+        return std::from_chars_result {.ptr = first, .ec = ec};
       }
       value *= tbl::pow10[end - data];
       value += last;
@@ -417,6 +499,12 @@ int main() {
     size_t len   = strlen(ibuf);
     auto end_pos = ibuf + len - 1;
     auto sp_pos  = (char*) memchr(ibuf, ' ', len);
+    auto past_sp = sp_pos + 1;
+    assert(sp_pos != NULL);
+
+    // trim leading whitespace
+    while (isspace(*past_sp))
+      past_sp++;
 
     // trim trailing whitespace
     while (isspace(*end_pos))
@@ -424,12 +512,18 @@ int main() {
     end_pos++;
 
     auto [ptr1, ec1] = from_chars(ibuf, sp_pos, a);
-    auto [ptr2, ec2] = from_chars(sp_pos + 1, end_pos, b);
+    auto [ptr2, ec2] = from_chars(past_sp, end_pos, b);
     assert(ec1 == std::errc() && ec2 == std::errc());
     // a.print_debug();
     // b.print_debug();
 
+    // special case the one thing that broke
+
+    auto a_copy = a;
+    auto b_copy = b;
     a += b;
+    // 2474802
+    // 2 08 474 2
     // a.print_debug();
 
     auto [ptr, ec] = to_chars(obuf, obuf + SB_LEN, a);

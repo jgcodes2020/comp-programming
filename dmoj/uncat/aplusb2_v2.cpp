@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cassert>
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
@@ -311,7 +312,7 @@ inline bigint parse_ys(std::string_view token) {
   return res;
 }
 
-inline std::string stream_sy(bigint& a) {
+inline size_t stream_sy(bigint& a, char* first, char* last) {
   std::vector<word_t> chunks;
   do {
     word_t rem = cdiv_xw(a.words, word_p10);
@@ -323,9 +324,10 @@ inline std::string stream_sy(bigint& a) {
   auto it   = chunks.rbegin();
   size_t dc = std::max(ilog10(*it), (size_t) 1);
 
-  std::string out(a.sign + dc + (chunks.size() - 1) * word_digits, '0');
-  char* optr = out.data();
-  char* eptr = out.data() + out.size();
+  size_t total_len = a.sign + dc + (chunks.size() - 1) * word_digits;
+  char* optr = first;
+  char* eptr = first + total_len;
+  assert(eptr < last);
 
   if (a.sign) {
     optr[0] = '-';
@@ -343,25 +345,28 @@ inline std::string stream_sy(bigint& a) {
     optr = res.ptr;
   }
 
-  return out;
+  return total_len;
 }
 
 inline std::istream& operator>>(std::istream& in, bigint& bi) {
-  std::string token;
+  thread_local std::string token;
+  token.reserve(100050);
   in >> token;
   bi = parse_ys(token);
   return in;
 }
 
 inline std::ostream& operator<<(std::ostream& out, const bigint& bi) {
+  thread_local char buffer[100050];
   bigint copy        = bi;
-  std::string buffer = stream_sy(copy);
-  return out << buffer;
+  size_t len = stream_sy(copy, buffer, buffer + sizeof(buffer));
+  return out << std::string_view(buffer, len);
 }
 
 inline std::ostream& operator<<(std::ostream& out, bigint&& bi) {
-  std::string buffer = stream_sy(bi);
-  return out << buffer;
+  thread_local char buffer[100050];
+  size_t len = stream_sy(bi, buffer, buffer + sizeof(buffer));
+  return out << std::string_view(buffer, len);
 }
 
 // TESTING ROUTINES
@@ -370,6 +375,8 @@ inline void aplusb2_dmoj_solution() {
   cin >> c;
 
   bigint x, y;
+  x.words.reserve(100050);
+  y.words.reserve(100050);
   for (int i = 0; i < c; i++) {
     cin >> x;
     cin >> y;
@@ -380,6 +387,9 @@ inline void aplusb2_dmoj_solution() {
 }
 
 inline void aplusb2_test() {
+  cin.sync_with_stdio(false);
+  cin.tie(NULL);
+
   int c;
   cin >> c;
 

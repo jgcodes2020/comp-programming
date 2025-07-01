@@ -3,3 +3,5 @@ __pycache__/
 /.cache
 /local/
 compile_commands.json
+*.in.txt
+*.out.txt
