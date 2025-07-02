@@ -61,7 +61,7 @@ namespace intr {
 }  // namespace intr
 
 namespace tbl {
-  constexpr uint64_t log10_approx_table[] {
+  constexpr size_t log10_approx_table[] {
     0,  0,  0,  0,  1,  1,  1,  2,  2,  2,  3,  3,  3,  3,  4,  4,  4,
     5,  5,  5,  6,  6,  6,  6,  7,  7,  7,  8,  8,  8,  9,  9,  9,  9,
     10, 10, 10, 11, 11, 11, 12, 12, 12, 12, 13, 13, 13, 14, 14, 14, 15,
@@ -93,6 +93,10 @@ namespace tbl {
 }  // namespace tbl
 
 namespace impl {
+  inline size_t ilog10(uint64_t x) {
+    size_t guess = tbl::log10_approx_table[std::bit_width(x)];
+    return guess + (x >= tbl::pow10[guess]);
+  }
 
   // Based on Moller and Granlund
   // https://gmplib.org/~tege/division-paper.pdf
@@ -274,7 +278,7 @@ namespace impl {
   }
 
   uint64_t div_vx(std::span<uint64_t> a, uint64_t b) {
-    if (a.size() < 5) {
+    if (true) {
       return div_simple_vx(a, b);
     }
     else {
@@ -391,7 +395,7 @@ public:
 
   friend std::from_chars_result from_chars(
     const char* data, const char* end, svint& value) {
-    constexpr uint64_t ONE_E19 = UINT64_C(10'000'000'000'000'000);
+    constexpr uint64_t ONE_E19 = UINT64_C(10'000'000'000'000'000'000);
 
     auto first = data;
 
@@ -401,15 +405,19 @@ public:
       value.m_sign = true;
     }
 
+    // B564000000000001 926687D2C40534FD 000000446C3B15F9
+
     while (end - data >= 19) {
       uint64_t next  = 0;
       auto [ptr, ec] = std::from_chars(data, data + 19, next);
       if (ec != std::errc {}) {
         return std::from_chars_result {.ptr = first, .ec = ec};
       }
+      data += 19;
       value *= ONE_E19;
       value += next;
     }
+
     if (end - data > 0) {
       uint64_t last  = 0;
       auto [ptr, ec] = std::from_chars(data, end, last);
@@ -426,7 +434,7 @@ public:
   friend std::to_chars_result to_chars(char* data, char* end, svint& value) {
     constexpr uint64_t ONE_E19 = UINT64_C(10'000'000'000'000'000'000);
 
-    static std::vector<uint64_t> cbuf;
+    thread_local std::vector<uint64_t> cbuf;
     cbuf.reserve(value.m_words.size() * 3 / 2);
 
     if (data == end) {
@@ -455,13 +463,29 @@ public:
         .ptr = end, .ec = std::errc::result_out_of_range};
     }
 
-    for (auto it = cbuf.rbegin(); it != cbuf.rend(); it++) {
-      auto [ptr, ec] = std::to_chars(data, end, *it);
-      if (ec != std::errc()) {
-        return std::to_chars_result {
-          .ptr = end, .ec = std::errc::result_out_of_range};
+    {
+      auto it = cbuf.rbegin();
+      // first chunk, don't need leading zeros
+      if (it != cbuf.rend()) {
+        auto [ptr, ec] = std::to_chars(data, end, *it);
+        if (ec != std::errc())
+          return std::to_chars_result {.ptr = end, .ec = ec};
+        data = ptr;
+        it++;
       }
-      data = ptr;
+      // remaining chunks need to be padded to 19 digits
+      while (it != cbuf.rend()) {
+        // compute output width of chunk
+        const size_t dc = std::max(impl::ilog10(*it), size_t(1));
+        char* chunk_end = data + 19;
+        // pad chunk to 19 digits
+        memset(data, '0', 19 - dc);
+        auto [ptr, ec] = std::to_chars(chunk_end - dc, chunk_end, *it);
+        if (ec != std::errc())
+          return std::to_chars_result {.ptr = end, .ec = ec};
+        data += 19;
+        it++;
+      }
     }
 
     return std::to_chars_result {.ptr = data, .ec = std::errc()};
@@ -493,6 +517,8 @@ int main() {
   a.reserve(WD_LEN);
   b.reserve(WD_LEN);
 
+  bool debug_enable = false;
+
   for (uint32_t i = 0; i < count; i++) {
     fgets(ibuf, SB_LEN, stdin);
     // find needed lengths
@@ -514,21 +540,17 @@ int main() {
     auto [ptr1, ec1] = from_chars(ibuf, sp_pos, a);
     auto [ptr2, ec2] = from_chars(past_sp, end_pos, b);
     assert(ec1 == std::errc() && ec2 == std::errc());
-    // a.print_debug();
-    // b.print_debug();
 
     // special case the one thing that broke
 
-    auto a_copy = a;
-    auto b_copy = b;
+    auto ac = a;
     a += b;
-    // 2474802
-    // 2 08 474 2
+    auto s = a;
     // a.print_debug();
 
     auto [ptr, ec] = to_chars(obuf, obuf + SB_LEN, a);
     assert(ec == std::errc());
     *ptr = '\0';
-    printf("%s\n", obuf);
+    puts(obuf);
   }
 }
