@@ -8,7 +8,7 @@
 #include <iostream>
 using namespace std;
 
-struct edge {
+struct u32_edge {
   int src;
   double w;
 };
@@ -16,7 +16,7 @@ constexpr size_t max_n = 1e5 + 3;
 
 int n = 0, m = 0;
 array<vector<int>, max_n> gd = {}; // down
-array<vector<edge>, max_n> gu = {}; // up (with weights)
+array<vector<u32_edge>, max_n> gu = {}; // up (with weights)
 array<double, max_n> pval = {};
 array<double, max_n> pacc = {};
 array<double, max_n> fval = {};
@@ -99,7 +99,7 @@ int main() {
       // total f (volume)
       // total p (pollution)
       double ft = 0.0, pt = 0.0;
-      for (edge& e : gu[i]) {
+      for (u32_edge& e : gu[i]) {
         double fe = fval[e.src] * e.w;
         ft += fe;
         pt += pacc[e.src] * fe;
