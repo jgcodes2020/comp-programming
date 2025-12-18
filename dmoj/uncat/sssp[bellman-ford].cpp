@@ -15,7 +15,7 @@ using cmp_weight_t = decltype(cmp_weight);
 
 inline u32 sat_add(u32 a, u32 b) {
   u32 sum = a + b;
-  return (sum < a)? UINT32_MAX : sum;
+  return (sum < a) ? UINT32_MAX : sum;
 }
 
 int main() {
@@ -32,29 +32,27 @@ int main() {
     u32 u = 0, v = 0, w = 0;
     cin >> u >> v >> w;
     graph[u].emplace_back(v, w);
+    graph[v].emplace_back(u, w);
   }
-
-  priority_queue<u32_edge, vector<u32_edge>, cmp_weight_t> heap;
+  
   vector<u32> dist;
 
-  // prepare dist array; set node 1 distance to 0; then everything else to maximum
+  // prepare dist array; set node 1 distance to 0; then everything else to
+  // maximum
   dist.reserve(n + 1);
   dist.resize(2, 0);
   dist.resize(n + 1, UINT32_MAX);
 
-  heap.emplace(1, 0);
-  while (!heap.empty()) {
-    // grab a node from the PQ
-    auto curr = heap.top();
-    heap.pop();
-
-    for (auto edge : graph[curr.v]) {
-      // check if the path from here is 
-      // shorter; record it if it is
-      u32 from_curr = sat_add(dist[curr.v], edge.w);
-      if (from_curr < dist[edge.v]) {
-        dist[edge.v] = from_curr;
-        heap.emplace(edge.v, from_curr);
+  for (size_t i = 0; i < n - 1; i++) {
+    // relax edges
+    for (u32 curr_v = 1; curr_v <= n; curr_v++) {
+      for (auto edge : graph[curr_v]) {
+        // check if the path from here is
+        // shorter; record it if it is
+        u32 from_curr = sat_add(dist[curr_v], edge.w);
+        if (from_curr < dist[edge.v]) {
+          dist[edge.v] = from_curr;
+        }
       }
     }
   }
