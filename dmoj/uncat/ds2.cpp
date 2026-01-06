@@ -92,7 +92,7 @@ int main() {
   // Confirm that the whole graph is connected.
   u32 final_root = dsu.find(1);
   bool connected = true;
-  for (u32 i = 2; i <= m; i++) {
+  for (u32 i = 2; i <= n; i++) {
     if (dsu.find(i) != final_root) {
       connected = false;
       break;
